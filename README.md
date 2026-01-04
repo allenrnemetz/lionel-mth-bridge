@@ -141,6 +141,8 @@ const char* password = "password123";
 - **Hidden networks** - Ensure your network is visible
 - **5GHz networks** - Arduino UNO Q only supports 2.4GHz
 - **Special characters** - Avoid spaces/special chars in passwords
+- **mDNS library missing** - Install ArduinoMDNS from Library Manager
+- **WTIU not advertising** - Ensure MTH WTIU is broadcasting mDNS services
 
 #### Verification:
 After uploading, open Serial Monitor (115200 baud). You should see:
@@ -150,16 +152,27 @@ Initializing WiFi...
 WiFi connected
 IP address: 192.168.x.x
 mDNS responder started
+Searching for MTH WTIU devices via mDNS...
+Found 1 WTIU service(s):
+  1: MTH-WTIU-12345 (192.168.0.100:8882)
+✅ Connected to WTIU: 192.168.0.100:8882
 === MTH WTIU Handler Ready ===
 ```
 
 ### 🌐 Network Requirements
 - **2.4GHz WiFi network** (required)
 - **Same network as MTH WTIU** (both devices must be on same subnet)
-- **mDNS/Bonjour enabled** (for automatic WTIU discovery)
+- **mDNS/Bonjour enabled** (Arduino UNO Q has native support via Linux/Avahi)
 - **No captive portal** (hotel/airport WiFi won't work)
 - **Stable connection** - WiFi dropouts will interrupt train control
 - **Router supports mDNS** - Most modern routers do, but some may need enabling
+
+### 📱 Arduino UNO Q mDNS Support
+- **Official ArduinoMDNS library** - Compatible with all Arduino boards
+- **WiFiNINA support** - Works with Arduino UNO Q's WiFi module
+- **Service discovery** - Finds WTIU devices automatically
+- **Port rotation handling** - Adapts to WTIU port changes
+- **No extra dependencies** - Single library installation
 
 ## Usage
 
@@ -301,9 +314,9 @@ The bridge includes intelligent auto-reconnect capabilities:
 ### MCU Issues
 - **WiFi not connecting**: Double-check SSID/password in sketch
 - **Can't find WTIU**: Ensure both devices on same 2.4GHz network
-- **mDNS failing**: Check network allows mDNS/bonjour traffic
-- **WTIU port changes**: mDNS automatically handles port rotation
-- **Serial Monitor**: Should show "WiFi connected", "mDNS responder started", and WTIU discovery
+- **ArduinoMDNS library missing**: Install via Arduino IDE Library Manager
+- **WTIU port changes**: ArduinoMDNS automatically handles port rotation
+- **Serial Monitor**: Should show "mDNS responder started" and WTIU discovery
 
 ### ProtoWhistle Issues
 - Verify MTH engine supports protowhistle

@@ -29,7 +29,7 @@
 
 #include <WiFiS3.h>
 #include <WiFiUdp.h>
-#include <ArduinoUNOQmDNS.h>
+#include <ArduinoMDNS.h>
 #include "speck_functions.h"
 
 // Command constants (must match MPU)
@@ -41,6 +41,7 @@
 #define CMD_SHUTDOWN        6
 #define CMD_ENGINE_SELECT   7
 #define CMD_PROTOWHISTLE    8
+#define CMD_WLED            9
 
 // Command packet structure (must match MPU)
 struct CommandPacket {
@@ -73,6 +74,9 @@ int wtiu_port_dynamic = 8882;           // Will be updated from mDNS
 bool wtiu_connected = false;
 unsigned long last_connection_attempt = 0;
 const unsigned long CONNECTION_RETRY_INTERVAL = 5000; // 5 seconds
+
+// mDNS instance
+MDNS mdns;
 
 // Status LED
 #define STATUS_LED LED_BUILTIN
@@ -151,7 +155,7 @@ void initializeWiFi() {
     Serial.println(WiFi.localIP());
     
     // Initialize mDNS for WTIU discovery
-    if (MDNS.begin("lionel-mth-bridge")) {
+    if (mdns.begin("lionel-mth-bridge")) {
       Serial.println("mDNS responder started");
     } else {
       Serial.println("Error setting up mDNS responder");
@@ -162,10 +166,10 @@ void initializeWiFi() {
 }
 
 bool discoverWTIU() {
-  Serial.println("Searching for MTH WTIU via mDNS...");
+  Serial.println("Searching for MTH WTIU devices via mDNS...");
   
-  // Send mDNS query for WTIU service
-  int n = MDNS.queryService(wtiu_service, wtiu_protocol);
+  // Use ArduinoMDNS library for service discovery
+  int n = mdns.queryService("wtiu", "tcp");
   
   if (n == 0) {
     Serial.println("No WTIU services found");
@@ -180,19 +184,19 @@ bool discoverWTIU() {
     Serial.print("  ");
     Serial.print(i + 1);
     Serial.print(": ");
-    Serial.print(MDNS.hostname(i));
+    Serial.print(mdns.hostname(i));
     Serial.print(" (");
-    Serial.print(MDNS.IP(i));
+    Serial.print(mdns.IP(i));
     Serial.print(":");
-    Serial.print(MDNS.port(i));
+    Serial.print(mdns.port(i));
     Serial.println(")");
     
     // Try to connect to this WTIU
-    strcpy(wtiu_host, MDNS.IP(i).toString().c_str());
-    wtiu_port_dynamic = MDNS.port(i);
+    strcpy(wtiu_host, mdns.IP(i).toString().c_str());
+    wtiu_port_dynamic = mdns.port(i);
     
     if (connectToWTIU()) {
-      Serial.print("Connected to WTIU: ");
+      Serial.print("✅ Connected to WTIU: ");
       Serial.print(wtiu_host);
       Serial.print(":");
       Serial.println(wtiu_port_dynamic);
@@ -232,7 +236,7 @@ bool connectToWTIU() {
 
 void maintainWTIUConnection() {
   // Update mDNS regularly
-  MDNS.update();
+  mdns.update();
   
   // Try to reconnect if connection is lost
   if (!wtiu_connected || !wtiu_client.connected()) {
@@ -244,7 +248,7 @@ void maintainWTIUConnection() {
       Serial.println("Attempting to rediscover and reconnect to MTH WTIU...");
       last_connection_attempt = current_time;
       
-      // Use mDNS to rediscover WTIU
+      // Rediscover WTIU
       if (!discoverWTIU()) {
         Serial.println("Failed to rediscover WTIU, will retry later");
       }

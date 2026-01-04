@@ -23,10 +23,11 @@ enabling Lionel remote control of MTH DCS-equipped trains.
 import serial
 import socket
 import time
-import threading
 import logging
-import sys
+import threading
 from threading import Lock
+import subprocess
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -51,7 +52,9 @@ class LionelMTHBridge:
             'function': 3,
             'smoke': 4,
             'pfa': 5,
-            'engine': 6
+            'engine': 6,
+            'protowhistle': 8,
+            'wled': 9
         }
         
         # Thread safety locks
@@ -134,7 +137,6 @@ class LionelMTHBridge:
         """Connect to Arduino MCU via Arduino Router"""
         try:
             # Stop Arduino Router to use MCU directly
-            import subprocess
             subprocess.run(['sudo', 'systemctl', 'stop', 'arduino-router'], 
                          capture_output=True)
             time.sleep(2)
@@ -219,6 +221,12 @@ class LionelMTHBridge:
                         'cab_chatter': 1, 'towercom': 2
                     }
                     cmd_value = value_map.get(command['value'], 0)
+                elif command['type'] == 'protowhistle':
+                    # ProtoWhistle commands use value field directly
+                    cmd_value = command['value']
+                elif command['type'] == 'wled':
+                    # WLED commands use engine number directly
+                    cmd_value = command['value']
                 else:
                     cmd_value = 0
                 
@@ -232,12 +240,20 @@ class LionelMTHBridge:
             return False
     
     def send_to_mth(self, command):
+        """Send command to MTH WTIU via MCU (Arduino handles MTH communication)"""
+        # Note: MTH communication is handled by Arduino MCU
+        # Python only needs to send commands to MCU via serial
+        # This method is kept for compatibility but MCU handles all MTH communication
+        logger.debug(f"MTH command handled by MCU: {command}")
+        return True
+
+    def send_to_mth_original(self, command):
         """Send command to MTH WTIU via WiFi"""
         for ip in self.mth_devices:
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.settimeout(2)
-                s.connect((ip, 80))
+                s.connect((ip, 8882))  # MTH WTIU uses port 8882, not 80
                 
                 # Send HTTP request with command
                 if command['type'] == 'direction':
@@ -362,7 +378,6 @@ class LionelMTHBridge:
         
         # Restart Arduino Router
         try:
-            import subprocess
             subprocess.run(['sudo', 'systemctl', 'start', 'arduino-router'], 
                          capture_output=True)
         except Exception as e:
