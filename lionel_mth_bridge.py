@@ -39,6 +39,64 @@ class LionelMTHBridge:
         self.lionel_serial = None
         self.mcu_serial = None
         self.running = False
+        self.auto_reconnect = True
+        self.connection_check_interval = 5  # seconds
+        self.max_reconnect_attempts = 10
+        
+    def wait_for_lionel_connection(self):
+        """Wait for SER2 to be available and connect"""
+        logger.info("🔄 Waiting for SER2 connection...")
+        attempt = 0
+        
+        while self.running and attempt < self.max_reconnect_attempts:
+            try:
+                # Try to open the port to see if SER2 is connected
+                test_serial = serial.Serial(self.lionel_port, baudrate=115200, timeout=1)
+                test_serial.close()
+                
+                # If we can open it, try to connect properly
+                if self.connect_lionel():
+                    logger.info("✅ SER2 connected and ready!")
+                    return True
+                    
+            except (serial.SerialException, OSError) as e:
+                attempt += 1
+                logger.info(f"⏳ Waiting for SER2... (attempt {attempt}/{self.max_reconnect_attempts})")
+                time.sleep(self.connection_check_interval)
+                
+        logger.error("❌ SER2 not found after maximum attempts")
+        return False
+    
+    def monitor_connections(self):
+        """Monitor connections and auto-reconnect if needed"""
+        logger.info("🔍 Starting connection monitor...")
+        
+        while self.running:
+            try:
+                # Check if Lionel connection is still alive
+                if self.lionel_serial is None or not self.lionel_serial.is_open:
+                    logger.warning("⚠️ Lionel connection lost, attempting reconnect...")
+                    if self.wait_for_lionel_connection():
+                        # Restart TMCC monitoring thread
+                        self.start_tmcc_monitoring()
+                    else:
+                        logger.error("❌ Failed to reconnect to SER2")
+                        
+                # Check if MCU connection is still alive  
+                if self.mcu_serial is None or not self.mcu_serial.is_open:
+                    logger.warning("⚠️ MCU connection lost, attempting reconnect...")
+                    self.connect_mcu()
+                
+            except Exception as e:
+                logger.error(f"❌ Connection monitor error: {e}")
+                
+            time.sleep(self.connection_check_interval)
+    
+    def start_connection_monitor(self):
+        """Start the connection monitoring thread"""
+        self.monitor_thread = threading.Thread(target=self.monitor_connections, daemon=True)
+        self.monitor_thread.start()
+        logger.info("🔍 Connection monitor started")
         
     def connect_lionel(self):
         """Connect to Lionel Base 3 via FTDI"""
@@ -221,24 +279,38 @@ class LionelMTHBridge:
                 logger.error(f"Lionel listener error: {e}")
                 time.sleep(1)
     
+    def start_tmcc_monitoring(self):
+        """Start TMCC packet monitoring thread"""
+        if hasattr(self, 'tmcc_thread') and self.tmcc_thread.is_alive():
+            return  # Already running
+            
+        self.tmcc_thread = threading.Thread(target=self.lionel_listener, daemon=True)
+        self.tmcc_thread.start()
+        logger.info("🎯 TMCC monitoring started")
+    
     def start(self):
-        """Start the bridge"""
-        logger.info("🚀 Starting Lionel-MTH Bridge...")
+        """Start the bridge with auto-reconnect"""
+        logger.info("🚀 Starting Lionel-MTH Bridge with auto-reconnect...")
         
-        if not self.connect_lionel():
-            return False
+        # Try to connect to SER2, but don't fail if not available
+        if not self.wait_for_lionel_connection():
+            logger.warning("⚠️ SER2 not available, will auto-reconnect when detected...")
         
+        # Try MCU connection
         if not self.connect_mcu():
             logger.warning("⚠️ MCU connection failed, continuing with MTH only...")
         
         self.running = True
         
-        # Start listener thread
-        listener_thread = threading.Thread(target=self.lionel_listener)
-        listener_thread.daemon = True
-        listener_thread.start()
+        # Start connection monitor
+        if self.auto_reconnect:
+            self.start_connection_monitor()
         
-        logger.info("✅ Bridge started! Use Lionel Base 3 remote...")
+        # Start TMCC monitoring if connected
+        if self.lionel_serial and self.lionel_serial.is_open:
+            self.start_tmcc_monitoring()
+        
+        logger.info("✅ Bridge started with auto-reconnect! Use Lionel Base 3 remote...")
         return True
     
     def stop(self):

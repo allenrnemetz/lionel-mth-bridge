@@ -27,25 +27,36 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     print("=== LIONEL-MTH BRIDGE STARTING ===")
-    print("This script will run continuously")
+    print("This script will run continuously with auto-reconnect")
     print("Press Ctrl+C to stop")
-    print("Checking imports...")
+    print("Waiting for SER2 connection...")
     
     try:
         from lionel_mth_bridge import LionelMTHBridge
         bridge = LionelMTHBridge()
-        bridge.run_forever()
+        
+        # Start bridge (will wait for SER2 if not connected)
+        if bridge.start():
+            print("✅ Bridge started successfully!")
+            print("🔄 Auto-reconnect enabled - will connect when SER2 is powered on")
+            
+            # Run forever with graceful shutdown
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\n🛑 Shutting down bridge...")
+                bridge.stop()
+                print("✅ Bridge stopped gracefully")
+        else:
+            print("❌ Failed to start bridge")
+            
     except ImportError as e:
         print(f"❌ Import error: {e}")
-        if "serial" in str(e):
-            print("❌ pyserial not installed")
-            print("Run: sudo apt install python3-serial")
-        else:
-            print(f"❌ Missing module: {e}")
-    except KeyboardInterrupt:
-        print("\n📡 Bridge stopped by user")
+        print("Make sure all dependencies are installed:")
+        print("pip install pyserial")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Unexpected error: {e}")
         import traceback
         traceback.print_exc()
 

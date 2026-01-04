@@ -24,6 +24,8 @@ This project creates a bridge between Lionel Base 3 systems and MTH DCS systems 
 
 ## Features
 - Control MTH trains using Lionel Cab-1L, Cab-2, or Cab-3 remotes
+- **Auto-Reconnect**: Automatically detects and connects when SER2 is powered on
+- **Power-Cycle Resilient**: Bridge runs continuously, handles SER2 power cycling
 - **Smart Whistle**: Whistle button automatically uses regular whistle or protowhistle based on mode
 - **Direct Engine Mapping**: Lionel engine 1-99 maps directly to MTH engine 1-99 (no offset)
 - **Fine Speed Control**: Ultra-fine low-speed control (1,3,5,10 Smph for first 4 steps)
@@ -74,7 +76,16 @@ python3 lionel_mth_bridge.py
 
 ## Usage
 
-1. **Connect Hardware**:
+### Auto-Reconnect Behavior
+The bridge includes intelligent auto-reconnect capabilities:
+
+- **🔄 SER2 Detection**: Automatically detects when SER2 is powered on
+- **⏳ Wait Mode**: Runs continuously waiting for SER2 connection
+- **🔌 Power-Cycle Handling**: Handles SER2 power cycling without stopping
+- **📡 Connection Monitoring**: Continuously monitors connection health
+- **🔄 Automatic Recovery**: Reconnects automatically if connection lost
+
+### 1. **Connect Hardware**:
    - Connect Lionel Base 3 to SER2 box
    - Connect SER2 box to FTDI cable
    - Connect FTDI cable to Arduino UNO Q USB port
