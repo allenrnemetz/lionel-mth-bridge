@@ -211,4 +211,4 @@ python3 lionel_mth_bridge.py
 GNU General Public License v3.0
 
 ## Author
-© Allen Nemetz Copyright 2025
+© Allen Nemetz Copyright 2026
