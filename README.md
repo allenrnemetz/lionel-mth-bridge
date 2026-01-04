@@ -24,7 +24,6 @@ This project creates a bridge between Lionel Base 3 systems and MTH DCS systems 
 
 ## Features
 - Control MTH trains using Lionel Cab-1, Cab-1L, Cab-2, or Cab-3 remotes
-- **ProtoWhistle Support**: AUX2 button toggles protowhistle mode
 - **Smart Whistle**: Whistle button automatically uses regular whistle or protowhistle based on mode
 - **Direct Engine Mapping**: Lionel engine 1-99 maps directly to MTH engine 1-99 (no offset)
 - **Fine Speed Control**: Ultra-fine low-speed control (1,3,5,10 Smph for first 4 steps)
