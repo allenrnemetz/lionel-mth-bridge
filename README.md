@@ -38,11 +38,11 @@ This project creates a bridge between Lionel Base 3 systems and MTH DCS systems 
 - **LED Indicator**: Shows connection status to MTH WTIU
 
 ## Hardware Requirements
-- **Lionel Base 3** TMCC controller
-- **Lionel SER2 Box** (TMCC to serial converter)
+- **Lionel Base 3** 2208010
+- **Lionel LCS SER2** (TMCC to serial converter 6-81326)
 - **FTDI USB Serial Cable** (USB-SER9 or similar)
-- **Arduino UNO Q** (MPU running Python)
-- **MTH WTIU** (WiFi-enabled DCS controller)
+- **Arduino UNO Q** (MPU running Python ABX00162)
+- **MTH WTIU** (WiFi-enabled DCS controller 50-1039)
 
 ## Connection Diagram
 ```
