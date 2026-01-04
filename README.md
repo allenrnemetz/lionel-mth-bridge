@@ -38,6 +38,7 @@ This project creates a bridge between Lionel Base 3 systems and MTH DCS systems 
 
 ## Hardware Requirements
 - **Lionel Base 3** 2208010
+- **Lionel Cab-1L, Cab-2, or Cab-3 Remote** (Base 3 compatible)
 - **Lionel LCS SER2** (TMCC to serial converter 6-81326)
 - **FTDI USB Serial Cable** (USB-SER9 or similar)
 - **Arduino UNO Q** (MPU running Python ABX00162)
