@@ -32,21 +32,21 @@ This bridge enables Lionel Base 3 systems to control MTH DCS trains using Arduin
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Arduino UNO Q                                            │
-│                                                          │
+│ Arduino UNO Q                                           │
+│                                                         │
 │  MPU (Linux - Qualcomm QRB2210)                         │
 │  • Python: lionel_mth_bridge_fixed.py                   │
 │  • WiFi to MTH WTIU (with mDNS discovery)               │
 │  • Speck encryption for secure communication            │
-│  • Serial to Lionel Base 3 (SER2 via FTDI)             │
-│                                                          │
-│         ↓ arduino-router socket                          │
-│                                                          │
-│  MCU (Arduino - STM32U585)                               │
-│  • Sketch: mcu_mth_handler.ino                           │
+│  • Serial to Lionel Base 3 (SER2 via FTDI)              │
+│                                                         │
+│         ↓ arduino-router socket                         │
+│                                                         │
+│  MCU (Arduino - STM32U585)                              │
+│  • Sketch: mcu_mth_handler.ino                          │
 │  • NO WiFi (handled by Python on MPU)                   │
-│  • Receives commands via Serial1                         │
-│  • USB Serial for debugging                              │
+│  • Receives commands via Serial1                        │
+│  • USB Serial for debugging                             │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -179,10 +179,8 @@ self.use_encryption = True   # Speck encryption
 
 ### Network Requirements
 
-- **2.4GHz WiFi** (Arduino UNO Q doesn't support 5GHz)
 - **Same network** as MTH WTIU
 - **mDNS/Bonjour enabled** (usually default on modern routers)
-- **No captive portal** (hotel/airport WiFi won't work)
 
 ---
 
