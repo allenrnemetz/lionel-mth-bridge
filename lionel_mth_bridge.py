@@ -99,6 +99,10 @@ class LionelMTHBridge:
         self.last_whistle_time = 0  # Last time whistle packet was received
         self.whistle_timeout = 0.3  # Seconds without packets before turning off whistle
         
+        # Volume tracking
+        self.master_volume = 70  # Default master volume (0-100)
+        self.volume_step = 5  # Volume increment/decrement step
+        
         # WTIU session key (from H5 response)
         self.wtiu_session_key = None
         
@@ -1017,8 +1021,8 @@ class LionelMTHBridge:
                 'smoke_on': 'abF',
                 'smoke_off': 'abE',
                 'smoke_toggle': 'abF',
-                'volume_up': 'v+',
-                'volume_down': 'v-',
+                'volume_up': 'volume_up',
+                'volume_down': 'volume_down',
                 'front_coupler': 'c0',
                 'rear_coupler': 'c1',
                 'whistle_pitch_1': 'w2',
@@ -1052,11 +1056,31 @@ class LionelMTHBridge:
                 self.engine_directions[self.current_lionel_engine] = new_dir
                 logger.info(f"🔧 DEBUG: Direction toggled from {current_dir} to {new_dir}")
                 return cmd_map['direction'][new_dir]
+            elif cmd_type == 'function' and cmd_value in ['volume_up', 'volume_down']:
+                # Handle volume commands
+                return self.convert_volume(cmd_value)
             elif cmd_value in cmd_map[cmd_type]:
                 return cmd_map[cmd_type][cmd_value]
         
         logger.warning(f"⚠️ Unknown command: {cmd_type}:{cmd_value}")
         return None
+    
+    def convert_volume(self, direction):
+        """Convert volume up/down to absolute volume command"""
+        try:
+            if direction == 'volume_up':
+                self.master_volume = min(100, self.master_volume + self.volume_step)
+            elif direction == 'volume_down':
+                self.master_volume = max(0, self.master_volume - self.volume_step)
+            else:
+                logger.warning(f"⚠️ Unknown volume direction: {direction}")
+                return None
+            
+            logger.info(f"🔧 DEBUG: Volume {direction} -> {self.master_volume}%")
+            return f"v0{self.master_volume:03d}"
+        except Exception as e:
+            logger.error(f"❌ Volume conversion error: {e}")
+            return None
     
     def convert_speed(self, speed_value):
         """Convert TMCC speed (0-31) to DCS speed (0-120)"""
