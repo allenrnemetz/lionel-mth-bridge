@@ -1028,38 +1028,27 @@ class LionelMTHBridge:
                     # Still holding - keep whistle on, don't send duplicate commands
                     logger.info(f"🔧 DEBUG: Horn button HELD - Whistle staying ON")
                     return None
-            elif data_field == 0x1D:  # Bell (11101) - CAB3 style: quick=ding, hold=toggle
+            elif data_field == 0x1D:  # Bell (11101) - Toggle on first press, debounce repeats
                 current_time = time.time()
                 engine = self.current_lionel_engine
                 
-                # Track when bell button was first pressed
-                press_start = self.bell_button_press_time.get(engine, 0)
-                hold_triggered = self.bell_hold_triggered.get(engine, False)
-                
-                # If this is a new press (>0.5s since last packet), record start time
-                if current_time - press_start > 0.5:
+                # Debounce - only toggle if >0.5s since last bell command
+                last_bell_time = self.bell_button_press_time.get(engine, 0)
+                if current_time - last_bell_time > 0.5:
+                    # Toggle bell state
                     self.bell_button_press_time[engine] = current_time
-                    self.bell_hold_triggered[engine] = False
-                    logger.debug(f"🔔 Bell button press started for engine {engine}")
-                    return None  # Wait to see if it's a quick press or hold
-                
-                # Check if held long enough to toggle (>0.5s)
-                hold_duration = current_time - press_start
-                if hold_duration >= 0.5 and not hold_triggered:
-                    # Hold detected - toggle continuous bell
-                    self.bell_hold_triggered[engine] = True
                     current_state = self.bell_states.get(engine, False)
                     new_state = not current_state
                     self.bell_states[engine] = new_state
                     
                     if new_state:
-                        logger.info(f"🔔 Bell ON (hold toggle) for engine {engine}")
+                        logger.info(f"🔔 Bell ON (toggle) for engine {engine}")
                         return {'type': 'bell', 'value': 'on', 'engine': engine}
                     else:
-                        logger.info(f"🔔 Bell OFF (hold toggle) for engine {engine}")
+                        logger.info(f"🔔 Bell OFF (toggle) for engine {engine}")
                         return {'type': 'bell', 'value': 'off', 'engine': engine}
                 
-                # Still holding after toggle triggered - ignore
+                # Debounced - ignore repeat packets
                 return None
             elif data_field == 0x1E:  # (11110) - Horn 2 / Secondary whistle
                 logger.info(f"🔧 DEBUG: Horn 2 / Secondary whistle detected")
@@ -2531,6 +2520,12 @@ class LionelMTHBridge:
             'engine': {
                 'startup': 'u4',
                 'shutdown': 'u5'
+            },
+            'bell': {
+                'on': 'w4',
+                'off': 'bFFFB',
+                'toggle': 'w4',
+                'ding': 'w4'
             }
         }
         

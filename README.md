@@ -206,8 +206,8 @@ You should see:
 
 | Engine | Type | Status |
 |--------|------|--------|
-| **C&O Allegheny** | Steam (PS1->PS3 Upgrade) | ✅ Verified |
-| **SW1500** | Diesel (PS3) | ✅ Verified |
+| **Chesapeake and Ohio Allegheny** | Steam (PS1->PS3 Upgrade) | ✅ Verified |
+| **Marburger Dairy SW1200** | Diesel (PS3) | ✅ Verified |
 
 ---
 
