@@ -1,4 +1,4 @@
-# Lionel MTH Bridge
+# O Gauge Command Control Bridge
 
 **Control MTH DCS trains using your Lionel Cab-1L, Cab-2, or Cab-3 remote**
 
@@ -161,7 +161,7 @@ You should see:
 
 ## Verified Commands
 
-### TMCC1 Mode
+### TMCC Mode
 
 | Button/Control | MTH Action | Status |
 |----------------|------------|--------|
