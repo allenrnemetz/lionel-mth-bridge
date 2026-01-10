@@ -71,14 +71,16 @@ Remote → Base 3 → SER2 → FTDI → Arduino UNO Q → WiFi → WTIU → Trac
    ```
 
 4. Upload these files to the `python/` folder:
+   - `main.py` (entry point for App Lab - replace the default one)
    - `lionel_mth_bridge.py` (main bridge script)
+   - `bridge_config.json` (configuration file)
    - `install.sh` (installer script)
    - `lionel-mth-bridge.service` (systemd service file)
 
 5. Upload to the `sketch/` folder:
-   - `mcu_mth_handler.ino` (Arduino sketch for hardware control)
+   - `mcu_mth_handler.ino` (Arduino sketch for MCU communication)
 
-6. In App Lab, click **Run** to flash it to the Arduino
+6. In App Lab, click **Run** to flash the files to the Arduino Uno Q
 
 ### Step 4: Run the Installer
 
@@ -96,7 +98,15 @@ The installer will:
 - Set up the systemd service
 - Start the bridge
 
-### Step 5: Add Engines to MTH WTIU
+### Step 5: Connect Hardware
+
+1. Disconnect the Arduino UNO Q from your computer
+2. Connect the USB hub to the Arduino UNO Q via USB-C
+3. Connect the power adapter to the USB hub's PD (Power Delivery) port
+4. Connect the FTDI cable to the USB hub
+5. Connect the FTDI cable's DB9 end to the SER2
+
+### Step 6: Add Engines to MTH WTIU
 
 **Before using the bridge**, you must add your MTH engines to the WTIU database using the MTH app:
 
@@ -107,7 +117,7 @@ The installer will:
 
 > **Important:** The bridge can only control engines that are already in the WTIU database
 
-### Step 6: Configuration (Optional)
+### Step 7: Configuration (Optional)
 
 The bridge auto-discovers MTH engines and maps them automatically. Most users won't need to change anything.
 
@@ -136,7 +146,7 @@ The bridge auto-discovers MTH engines and maps them automatically. Most users wo
 ```
 This would map Lionel #10 to MTH engine 48 (use the MTH app number + 1 for the DCS value).
 
-### Step 7: Verify It's Working
+### Step 8: Verify It's Working
 
 Check the service status:
 ```bash
