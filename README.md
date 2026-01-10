@@ -161,7 +161,7 @@ You should see:
 
 ## Verified Commands
 
-### TMCC1 Mode
+### TMCC Mode
 
 | Button/Control | MTH Action | Status |
 |----------------|------------|--------|
