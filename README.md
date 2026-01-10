@@ -43,23 +43,15 @@ Remote → Base 3 → SER2 → FTDI → Arduino UNO Q → WiFi → WTIU → Trac
 
 ## Installation
 
-### Step 1: Hardware Setup
-
-1. Connect SER2 to Lionel Base 3 LCS port
-2. Connect FTDI cable to SER2 DB9 port  
-3. Connect FTDI USB to Arduino UNO Q (via USB hub)
-4. Power on MTH WTIU and connect to your WiFi network
-
-### Step 2: Arduino UNO Q Setup
+### Step 1: Arduino UNO Q Setup
 
 1. Download **Arduino App Lab** from arduino.cc
 2. Connect Arduino via USB-C and open App Lab
 3. Go to **Settings → Network** and connect to your WiFi
-4. Note the Arduino's IP address (e.g., `192.168.0.5`)
 
 > **Important:** Arduino and WTIU must be on the same network subnet
 
-### Step 3: Create Project in Arduino App Lab
+### Step 2: Create Project in Arduino App Lab
 
 1. Open **Arduino App Lab** and connect to your Arduino UNO Q
 2. Click **New Project** and name it `lcs-to-mth-bridge`
@@ -82,7 +74,7 @@ Remote → Base 3 → SER2 → FTDI → Arduino UNO Q → WiFi → WTIU → Trac
 
 6. In App Lab, click **Run** to flash the files to the Arduino Uno Q
 
-### Step 4: Run the Installer
+### Step 3: Run the Installer
 
 In App Lab, click the **Connect to the board's shell** button to open the board's terminal, then run:
 
@@ -98,7 +90,7 @@ The installer will:
 - Set up the systemd service
 - Start the bridge
 
-### Step 5: Connect Hardware
+### Step 4: Connect Hardware
 
 1. Disconnect the Arduino UNO Q from your computer
 2. Connect the USB hub to the Arduino UNO Q via USB-C
@@ -106,7 +98,7 @@ The installer will:
 4. Connect the FTDI cable to the USB hub
 5. Connect the FTDI cable's DB9 end to the SER2
 
-### Step 6: Add Engines to MTH WTIU
+### Step 5: Add Engines to MTH WTIU
 
 **Before using the bridge**, you must add your MTH engines to the WTIU database using the MTH app:
 
@@ -117,7 +109,7 @@ The installer will:
 
 > **Important:** The bridge can only control engines that are already in the WTIU database
 
-### Step 7: Configuration (Optional)
+### Step 6: Configuration (Optional)
 
 The bridge auto-discovers MTH engines and maps them automatically. Most users won't need to change anything.
 
@@ -146,7 +138,7 @@ The bridge auto-discovers MTH engines and maps them automatically. Most users wo
 ```
 This would map Lionel #10 to MTH engine 48 (use the MTH app number + 1 for the DCS value).
 
-### Step 8: Verify It's Working
+### Step 7: Verify It's Working
 
 Check the service status:
 ```bash
@@ -214,7 +206,7 @@ You should see:
 
 | Engine | Type | Status |
 |--------|------|--------|
-| **C&O Allegheny** | Steam (PS3) | ✅ Verified |
+| **C&O Allegheny** | Steam (PS1->PS3 Upgrade) | ✅ Verified |
 | **SW1500** | Diesel (PS3) | ✅ Verified |
 
 ---
@@ -222,8 +214,7 @@ You should see:
 ## Coming Soon
 
 - **Consist/Lashup Support** - Build and control multi-engine consists
-- **Accessory Control** - Switch and accessory command translation
-- **Custom Sound Triggers** - Map additional sounds to numeric keys
+- **Additional Device Control** - Control other devices through the MCU with additional apps (room lighting scenes, etc.)
 
 ---
 
