@@ -4177,35 +4177,63 @@ class LionelMTHBridge:
                             # 0x43 = TRAIN_UNIT (sets position: HEAD_FWD, TAIL_REV, etc.)
                             self._process_consist_commands(data)
                             
-                            # Look for TMCC packets
-                            for i in range(len(data) - 2):
-                                if data[i] in [0xFE, 0xF8, 0xF9, 0xFB]:
-                                    packet = data[i:i+3]
-                                    packet_count += 1
-                                    logger.info(f"🎯 TMCC Packet #{packet_count}: {packet.hex()}")
+                            # Buffer for handling fragmented TMCC packets
+                            if not hasattr(self, '_tmcc_buffer'):
+                                self._tmcc_buffer = bytearray()
+                            
+                            # Add new data to buffer
+                            self._tmcc_buffer.extend(data)
+                            
+                            # Process complete packets from buffer
+                            while len(self._tmcc_buffer) >= 3:
+                                # Look for TMCC packet start bytes
+                                start_idx = -1
+                                for i in range(len(self._tmcc_buffer) - 2):
+                                    if self._tmcc_buffer[i] in [0xFE, 0xF8, 0xF9, 0xFB]:
+                                        start_idx = i
+                                        break
+                                
+                                if start_idx == -1:
+                                    # No valid start byte found, clear buffer up to last 2 bytes
+                                    self._tmcc_buffer = self._tmcc_buffer[-2:]
+                                    break
+                                
+                                # Remove any garbage before the start byte
+                                if start_idx > 0:
+                                    self._tmcc_buffer = self._tmcc_buffer[start_idx:]
+                                
+                                if len(self._tmcc_buffer) < 3:
+                                    break  # Need more data
+                                
+                                # Extract 3-byte packet
+                                packet = bytes(self._tmcc_buffer[:3])
+                                self._tmcc_buffer = self._tmcc_buffer[3:]
+                                
+                                packet_count += 1
+                                logger.info(f"🎯 TMCC Packet #{packet_count}: {packet.hex()}")
+                                
+                                # Parse and forward (handles both TMCC1 and Legacy)
+                                command = self.parse_packet(packet)
+                                if command:
+                                    protocol = command.get('protocol', 'tmcc1')
+                                    logger.info(f"📤 {protocol.upper()}: {command.get('type')} = {command.get('value')}")
                                     
-                                    # Parse and forward (handles both TMCC1 and Legacy)
-                                    command = self.parse_packet(packet)
-                                    if command:
-                                        protocol = command.get('protocol', 'tmcc1')
-                                        logger.info(f"📤 {protocol.upper()}: {command.get('type')} = {command.get('value')}")
-                                        
-                                        # Check for lashup commands first
-                                        if self.handle_lashup_command(command):
-                                            logger.info("🔗 Lashup command handled")
-                                            continue
-                                        
-                                        # Use Legacy-aware sending for Legacy commands
-                                        if protocol in ('legacy', 'legacy_train'):
-                                            if self.send_to_mth_with_legacy(command):
-                                                logger.info("✅ Legacy → MTH")
-                                        else:
-                                            # TMCC1 - use original path
-                                            mth_cmd = self.convert_to_mth_protocol(command)
-                                            if mth_cmd:
-                                                logger.info(f"📤 MTH: {mth_cmd}")
-                                            self.send_to_mcu(command)
-                                            self.send_to_mth(command)
+                                    # Check for lashup commands first
+                                    if self.handle_lashup_command(command):
+                                        logger.info("🔗 Lashup command handled")
+                                        continue
+                                    
+                                    # Use Legacy-aware sending for Legacy commands
+                                    if protocol in ('legacy', 'legacy_train'):
+                                        if self.send_to_mth_with_legacy(command):
+                                            logger.info("✅ Legacy → MTH")
+                                    else:
+                                        # TMCC1 - use original path
+                                        mth_cmd = self.convert_to_mth_protocol(command)
+                                        if mth_cmd:
+                                            logger.info(f"📤 MTH: {mth_cmd}")
+                                        self.send_to_mcu(command)
+                                        self.send_to_mth(command)
                         else:
                             # Log every 10 seconds if no data received
                             if time.time() - last_activity > 10:
