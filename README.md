@@ -195,11 +195,9 @@ You should see:
 | **Whistle Slider** | ProtoWhistle with 4-level pitch control | ✅ Verified |
 | **Bell** (hold >0.5s) | Toggle bell on/off | ✅ Verified |
 | **Bell** (quick press) | Single bell ring | ✅ Verified |
-| **Power Button** (quick) | Quick startup | ✅ Verified |
-| **Power Button** (hold) | Extended startup sequence | ✅ Verified |
-| **Shutdown Button** (quick) | Quick shutdown | ✅ Verified |
-| **Shutdown Button** (hold) | Extended shutdown sequence | ✅ Verified |
-| **AUX1 Option 1** | Quick startup | ✅ Verified |
+| **Power Button** | Extended startup sequence | ✅ Verified |
+| **Shutdown Button** | Extended shutdown sequence | ✅ Verified |
+| **AUX1** | Quick startup | ✅ Verified |
 | **Keypad 1** | Volume up | ✅ Verified |
 | **Keypad 4** | Volume down | ✅ Verified |
 | **Keypad 5** | Quick shutdown | ✅ Verified |
