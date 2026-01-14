@@ -2130,10 +2130,19 @@ class LionelMTHBridge:
                     last_pfa_time = self.pfa_direction.get(engine, 0)  # Timestamp of last press
                     pfa_active = self.pfa_state.get(engine, False)  # True if PFA is running
                     
+                    # Check if this engine is part of a lashup
+                    train_id = command.get('train_id', 0)
+                    mth_lashup_id = None
+                    if train_id > 0:
+                        mth_lashup_id = self.lashup_manager.get_mth_id_for_tr(train_id)
+                    
                     # If PFA was active but 60+ seconds since last press, end it first
                     if pfa_active and (current_time - last_pfa_time > 60):
                         logger.info(f" PFA Timeout: Engine {engine} → u0 (inactive for 60s)")
-                        self.send_wtiu_command('u0')
+                        if mth_lashup_id:
+                            self.send_lashup_command(mth_lashup_id, 'u0', train_id)
+                        else:
+                            self.send_wtiu_command('u0')
                         self.pfa_state[engine] = False
                         pfa_active = False
                     
@@ -2142,12 +2151,20 @@ class LionelMTHBridge:
                     if not pfa_active:
                         # Start new PFA sequence
                         self.pfa_state[engine] = True
-                        logger.info(f" PFA Started: Engine {engine} → u1")
-                        return self.send_wtiu_command('u1')
+                        if mth_lashup_id:
+                            logger.info(f" PFA Started: TR{train_id} → MTH lashup {mth_lashup_id} u1")
+                            return self.send_lashup_command(mth_lashup_id, 'u1', train_id)
+                        else:
+                            logger.info(f" PFA Started: Engine {engine} → u1")
+                            return self.send_wtiu_command('u1')
                     else:
                         # Advance to next announcement
-                        logger.info(f" PFA Advance: Engine {engine} → m24")
-                        return self.send_wtiu_command('m24')
+                        if mth_lashup_id:
+                            logger.info(f" PFA Advance: TR{train_id} → MTH lashup {mth_lashup_id} m24")
+                            return self.send_lashup_command(mth_lashup_id, 'm24', train_id)
+                        else:
+                            logger.info(f" PFA Advance: Engine {engine} → m24")
+                            return self.send_wtiu_command('m24')
                     
                 # Other numerics -> idle sounds
                 elif num in [3, 6, 7, 8, 9]:
@@ -3441,6 +3458,38 @@ class LionelMTHBridge:
         # Track volume state and adjust by 10% per button press
         if not hasattr(self, '_lashup_volume'):
             self._lashup_volume = {}
+        
+        # 0x112 = Button 2 (PFA) - Passenger/Freight Announcements
+        # First press: u1 to start, subsequent presses: m24 to advance
+        # After 60 seconds of inactivity: send u0 to end, then next press starts fresh with u1
+        if cmd_code == 0x112:
+            import time
+            current_time = time.time()
+            
+            # Use train_id for PFA state tracking in lashup mode
+            pfa_key = f"tr_{train_id}"
+            last_pfa_time = self.pfa_direction.get(pfa_key, 0)
+            pfa_active = self.pfa_state.get(pfa_key, False)
+            
+            # If PFA was active but 60+ seconds since last press, end it first
+            if pfa_active and (current_time - last_pfa_time > 60):
+                logger.info(f"🚂 TR{train_id} PFA Timeout → u0 (inactive for 60s)")
+                self.send_lashup_command(mth_id, 'u0', train_id)
+                self.pfa_state[pfa_key] = False
+                pfa_active = False
+            
+            self.pfa_direction[pfa_key] = current_time
+            
+            if not pfa_active:
+                # Start new PFA sequence
+                self.pfa_state[pfa_key] = True
+                logger.info(f"🚂 TR{train_id} PFA Started → MTH lashup {mth_id} u1")
+                self.send_lashup_command(mth_id, 'u1', train_id)
+            else:
+                # Advance to next announcement
+                logger.info(f"🚂 TR{train_id} PFA Advance → MTH lashup {mth_id} m24")
+                self.send_lashup_command(mth_id, 'm24', train_id)
+            return
         
         # 0x111 = Button 1 (Volume Up)
         if cmd_code == 0x111:
