@@ -203,7 +203,11 @@ class LegacyProtocolParser:
         self.speed_high_bit = {}  # {engine: True/False} - tracks if next speed should add 128
         
     def parse_legacy_packet(self, packet):
-        """Parse Legacy protocol packets (0xF8, 0xF9)"""
+        """Parse Legacy protocol packets (0xF8, 0xF9)
+        
+        NOTE: 0xFB is NOT a valid start byte - it's a continuation marker for multi-word commands.
+        Multi-word commands (9 bytes) are handled separately in _parse_multiword_packet().
+        """
         if len(packet) < 3:
             return None
             
@@ -213,8 +217,7 @@ class LegacyProtocolParser:
             return self.parse_legacy_engine_command(packet)
         elif first_byte == 0xF9:  # Train commands
             return self.parse_legacy_train_command(packet)
-        elif first_byte == 0xFB:  # Multi-word commands
-            return self.parse_multiword_command(packet)
+        # NOTE: 0xFB is handled as part of 9-byte multi-word sequences, not here
             
         return None
     
@@ -1485,7 +1488,9 @@ class LionelMTHBridge:
         first_byte = packet[0]
         
         # Legacy protocol packets
-        if first_byte in [0xF8, 0xF9, 0xFB] and self.legacy_enabled:
+        # NOTE: 0xFB is NOT a valid start byte - it's a continuation marker for multi-word commands
+        # 0xFB packets are handled separately as part of 9-byte multi-word sequences
+        if first_byte in [0xF8, 0xF9] and self.legacy_enabled:
             logger.info(f"🔧 Legacy packet detected: 0x{first_byte:02x}")
             command = self.legacy_parser.parse_legacy_packet(packet)
             if command:
@@ -4318,9 +4323,11 @@ class LionelMTHBridge:
                             # Process complete packets from buffer
                             while len(self._tmcc_buffer) >= 3:
                                 # Look for TMCC packet start bytes
+                                # NOTE: 0xFB is NOT a start byte - it's a continuation marker for multi-word commands
+                                # Valid start bytes: 0xFE (TMCC1), 0xF8 (Legacy Engine), 0xF9 (Legacy Train)
                                 start_idx = -1
                                 for i in range(len(self._tmcc_buffer) - 2):
-                                    if self._tmcc_buffer[i] in [0xFE, 0xF8, 0xF9, 0xFB]:
+                                    if self._tmcc_buffer[i] in [0xFE, 0xF8, 0xF9]:
                                         start_idx = i
                                         break
                                 
@@ -4331,10 +4338,42 @@ class LionelMTHBridge:
                                 
                                 # Remove any garbage before the start byte
                                 if start_idx > 0:
+                                    logger.debug(f"🔧 Discarding {start_idx} bytes before start byte")
                                     self._tmcc_buffer = self._tmcc_buffer[start_idx:]
                                 
                                 if len(self._tmcc_buffer) < 3:
                                     break  # Need more data
+                                
+                                # Check if this is a multi-word command (9 bytes total)
+                                # Multi-word: F8/F9 + 2 bytes, then FB + 2 bytes, then FB + 2 bytes
+                                # We detect by checking if byte[2] indicates a multi-word parameter index
+                                first_byte = self._tmcc_buffer[0]
+                                is_multiword = False
+                                
+                                if first_byte in [0xF8, 0xF9] and len(self._tmcc_buffer) >= 9:
+                                    # Check if bytes 3 and 6 are 0xFB (continuation markers)
+                                    if self._tmcc_buffer[3] == 0xFB and self._tmcc_buffer[6] == 0xFB:
+                                        is_multiword = True
+                                
+                                if is_multiword:
+                                    # Extract 9-byte multi-word packet
+                                    packet = bytes(self._tmcc_buffer[:9])
+                                    self._tmcc_buffer = self._tmcc_buffer[9:]
+                                    packet_count += 1
+                                    logger.info(f"🎯 Multi-word Packet #{packet_count}: {packet.hex()}")
+                                    
+                                    # Parse multi-word command (smoke, effects, etc.)
+                                    command = self._parse_multiword_packet(packet)
+                                    if command:
+                                        protocol = command.get('protocol', 'legacy')
+                                        logger.info(f"📤 {protocol.upper()}: {command.get('type')} = {command.get('value')}")
+                                        if self.handle_lashup_command(command):
+                                            logger.info("🔗 Lashup command handled")
+                                            continue
+                                        if protocol in ('legacy', 'legacy_train'):
+                                            if self.send_to_mth_with_legacy(command):
+                                                logger.info("✅ Legacy → MTH")
+                                    continue
                                 
                                 # Extract 3-byte packet
                                 packet = bytes(self._tmcc_buffer[:3])
@@ -4376,6 +4415,59 @@ class LionelMTHBridge:
             except Exception as e:
                 logger.error(f"Lionel listener error: {e}")
                 time.sleep(1)
+    
+    def _parse_multiword_packet(self, packet: bytes):
+        """Parse 9-byte multi-word Legacy command
+        
+        Multi-word format (9 bytes = 3 words):
+        Word 1: F8/F9 + Address + Parameter Index (0x0C=Effects, 0x0D=Lighting, etc.)
+        Word 2: FB + Address + Parameter Data
+        Word 3: FB + Address + Checksum
+        
+        For smoke (Effects index 0x0C):
+        - Data 0x00 = Smoke Off
+        - Data 0x01 = Smoke Low  
+        - Data 0x02 = Smoke Medium
+        - Data 0x03 = Smoke High
+        """
+        if len(packet) != 9:
+            return None
+        
+        first_byte = packet[0]
+        
+        # Extract address from word 1 (bits 14-8 of word)
+        word1 = (packet[1] << 8) | packet[2]
+        if first_byte == 0xF8:  # Engine command
+            address = (word1 >> 9) & 0x7F
+            param_index = word1 & 0xFF
+        elif first_byte == 0xF9:  # Train command
+            address = (word1 >> 9) & 0x7F
+            param_index = word1 & 0x1FF
+        else:
+            return None
+        
+        # Extract parameter data from word 2
+        word2 = (packet[4] << 8) | packet[5]
+        param_data = word2 & 0xFF
+        
+        logger.info(f"🔧 Multi-word: first=0x{first_byte:02x}, addr={address}, param_idx=0x{param_index:02x}, data=0x{param_data:02x}")
+        
+        # Effects commands (param_index 0x0C)
+        if param_index == 0x0C:
+            # Smoke levels
+            if param_data <= 0x03:
+                smoke_levels = {0x00: 'off', 0x01: 'low', 0x02: 'med', 0x03: 'high'}
+                smoke_value = smoke_levels.get(param_data, 'off')
+                logger.info(f"💨 Multi-word smoke: {smoke_value} for engine {address}")
+                return {'type': 'smoke_direct', 'value': smoke_value, 'engine': address, 'protocol': 'legacy'}
+        
+        # Lighting commands (param_index 0x0D)
+        if param_index == 0x0D:
+            logger.info(f"💡 Multi-word lighting: data=0x{param_data:02x} for engine {address}")
+            # Could add lighting handling here
+            return None
+        
+        return None
     
     def _process_consist_commands(self, data: bytes):
         """Process 9-byte TRAIN_ADDRESS/TRAIN_UNIT multi-word commands for consist detection
