@@ -1186,7 +1186,6 @@ class LionelMTHBridge:
         
         # Apply configuration settings
         self.lionel_port = self.settings.get('lionel_port', '/dev/ttyUSB0')
-        self.mcu_port = self.settings.get('mcu_port', '/dev/ttymxc3')
         self.mth_host = self.settings.get('mth_host', 'auto')
         self.mth_port = self.settings.get('mth_port', 'auto')
         self.engine_mappings = self.settings.get('engine_mappings', {})
@@ -1207,15 +1206,8 @@ class LionelMTHBridge:
         
         self.mth_devices = ['192.168.0.100', '192.168.0.102']
         self.lionel_serial = None
-        self.mcu_serial = None
-        self.mcu_connected = False
         self.mth_connected = False
         self.mth_socket = None
-        # MCU connection monitoring
-        self.mcu_last_heartbeat = time.time()
-        self.mcu_heartbeat_interval = 10  # seconds
-        self.mcu_last_ack = {}  # Track ACK responses per command type
-        self.mcu_response_thread = None  # MCU response monitoring thread
         self.running = False
         self.auto_reconnect = True
         self.connection_check_interval = 5  # seconds
@@ -1239,21 +1231,8 @@ class LionelMTHBridge:
         self.use_encryption = mth_settings.get('use_encryption', True)
         self.simplified_handshake_first = mth_settings.get('simplified_handshake_first', True)
         
-        # Command type mapping for MCU communication
-        self.mcu_command_types = {
-            'direction': 1,
-            'speed': 2, 
-            'function': 3,
-            'smoke': 4,
-            'pfa': 5,
-            'engine': 6,
-            'protowhistle': 8,
-            'wled': 9
-        }
-        
         # Thread safety locks
         self.lionel_lock = Lock()
-        self.mcu_lock = Lock()
         self.mth_lock = Lock()
         
         # Speck encryption settings (Mark's RTCRemote - using his actual key)
@@ -1380,11 +1359,6 @@ class LionelMTHBridge:
                     else:
                         logger.error("❌ Failed to reconnect to SER2")
                         
-                # Check if MCU connection is still alive  
-                if self.mcu_serial and not self.mcu_serial.is_open:
-                    logger.warning("⚠️ MCU connection lost, attempting reconnect...")
-                    self.connect_mcu()
-                
                 # Check if MTH WTIU connection is still alive
                 if not self.mth_connected or not self.mth_socket:
                     logger.warning("⚠️ MTH WTIU connection lost, attempting reconnect...")
@@ -1397,15 +1371,6 @@ class LionelMTHBridge:
                 logger.error(f"❌ Connection monitor error: {e}")
                 
             time.sleep(self.connection_check_interval)
-    
-    def _is_mcu_connected(self):
-        """Check if MCU connection is alive"""
-        if not self.mcu_serial:
-            return False
-        try:
-            return self.mcu_serial.is_open
-        except:
-            return False
     
     def start_connection_monitor(self):
         """Start the connection monitoring thread"""
@@ -1429,56 +1394,6 @@ class LionelMTHBridge:
         except Exception as e:
             logger.error(f"❌ Lionel connection failed: {e}")
             return False
-    
-    def connect_mcu(self):
-        """Connect to Arduino MCU via arduino-router Unix socket"""
-        import platform
-        
-        system = platform.system()
-        
-        if system == 'Linux':
-            # On Arduino UNO Q, use the arduino-router Unix socket
-            socket_path = '/var/run/arduino-router.sock'
-            try:
-                import socket as sock
-                self.mcu_socket = sock.socket(sock.AF_UNIX, sock.SOCK_STREAM)
-                self.mcu_socket.connect(socket_path)
-                self.mcu_socket.settimeout(1.0)
-                self.mcu_connected = True
-                logger.info(f"✅ Connected to Arduino MCU via arduino-router ({socket_path})")
-                return True
-            except FileNotFoundError:
-                logger.info(f"Arduino router socket not found at {socket_path}")
-            except PermissionError:
-                logger.info(f"Permission denied for {socket_path} - try running as root")
-            except Exception as e:
-                logger.info(f"Arduino router connection failed: {e}")
-        
-        # Fallback: try direct serial (if arduino-router is stopped)
-        logger.info("Trying direct serial connection as fallback...")
-        import glob
-        
-        if system == 'Windows':
-            possible_ports = [f'COM{i}' for i in range(1, 20)]
-        elif system == 'Linux':
-            possible_ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
-        else:
-            possible_ports = glob.glob('/dev/tty.usbserial*') + glob.glob('/dev/tty.usbmodem*')
-        
-        for port in possible_ports:
-            try:
-                self.mcu_serial = serial.Serial(port, baudrate=115200, timeout=1)
-                self.mcu_connected = True
-                self.mcu_port = port
-                logger.info(f"✅ Connected to Arduino MCU via serial ({port})")
-                return True
-            except:
-                continue
-        
-        logger.info(f"MCU connection not available on {system}")
-        logger.info("💡 On Arduino UNO Q, make sure arduino-router service is running")
-        self.mcu_connected = False
-        return False
     
     def parse_packet(self, packet):
         """Enhanced packet parser that handles both TMCC1 and Legacy"""
@@ -2302,156 +2217,6 @@ class LionelMTHBridge:
             'direction': self.engine_directions.get(engine, 'forward'),
             'supports_legacy': engine in self.legacy_capable_engines
         }
-    
-    def send_to_mcu(self, command):
-        """Send command to Arduino MCU with proper 3-part format"""
-        if not self.mcu_connected:
-            logger.debug("MCU not connected - command not sent")
-            return False
-            
-        try:
-            with self.mcu_lock:
-                # Get command type code
-                cmd_type_code = self.mcu_command_types.get(command['type'], 0)
-                
-                # Get engine number (default to current Lionel engine)
-                engine_num = self.current_lionel_engine
-                
-                # Handle different value types
-                if command['type'] == 'speed':
-                    cmd_value = command['value']
-                elif command['type'] == 'engine':
-                    cmd_value = 1 if command['value'] == 'start' else 0
-                elif command['type'] == 'direction':
-                    cmd_value = 1 if command['value'] == 'forward' else 0
-                elif command['type'] in ['function', 'smoke', 'pfa']:
-                    value_map = {
-                        'horn': 1, 'bell': 2,
-                        'increase': 1, 'decrease': 2, 'on': 3, 'off': 4,
-                        'cab_chatter': 1, 'towercom': 2
-                    }
-                    cmd_value = value_map.get(command['value'], 0)
-                elif command['type'] == 'protowhistle':
-                    cmd_value = command['value']
-                elif command['type'] == 'wled':
-                    cmd_value = command['value']
-                else:
-                    cmd_value = 0
-                
-                # FIXED: Include engine number in command
-                cmd_string = f"CMD:{cmd_type_code}:{engine_num}:{cmd_value}\n"
-                
-                # Send via socket or serial
-                if hasattr(self, 'mcu_socket') and self.mcu_socket:
-                    self.mcu_socket.send(cmd_string.encode())
-                    logger.debug(f"Sent to MCU via socket: {cmd_string.strip()}")
-                elif hasattr(self, 'mcu_serial') and self.mcu_serial:
-                    self.mcu_serial.write(cmd_string.encode())
-                    logger.debug(f"Sent to MCU via serial: {cmd_string.strip()}")
-                else:
-                    logger.debug("No MCU connection available")
-                    return False
-                    
-                return True
-                
-        except Exception as e:
-            logger.error(f"MCU send error: {e}")
-            return False
-    
-    def read_mcu_responses(self):
-        """Read responses from MCU"""
-        try:
-            if hasattr(self, 'mcu_socket') and self.mcu_socket:
-                # Read from socket
-                self.mcu_socket.settimeout(0.1)
-                try:
-                    response = self.mcu_socket.recv(256).decode().strip()
-                    if response:
-                        self._process_mcu_response(response)
-                except socket.timeout:
-                    pass
-                except Exception as e:
-                    logger.debug(f"MCU socket read error: {e}")
-                    
-            elif hasattr(self, 'mcu_serial') and self.mcu_serial:
-                # Read from serial
-                if self.mcu_serial.in_waiting > 0:
-                    response = self.mcu_serial.readline().decode().strip()
-                    if response:
-                        self._process_mcu_response(response)
-                        
-        except Exception as e:
-            logger.debug(f"MCU response read error: {e}")
-    
-    def _process_mcu_response(self, response):
-        """Process MCU response"""
-        logger.info(f"MCU: {response}")
-        
-        if response.startswith("ACK:"):
-            parts = response.split(":")
-            if len(parts) >= 3:
-                cmd_type = parts[1]
-                engine_num = parts[2]
-                logger.info(f"✅ Command acknowledged: type={cmd_type}, engine={engine_num}")
-                
-                # Update last ACK time for heartbeat monitoring
-                self.mcu_last_heartbeat = time.time()
-                
-                # Track ACK per command type
-                self.mcu_last_ack[cmd_type] = time.time()
-                
-        elif response == "HEARTBEAT":
-            logger.debug("🫀 MCU heartbeat received")
-            self.mcu_last_heartbeat = time.time()
-            
-        elif response == "RESET":
-            logger.info("🔄 MCU reset notification")
-            
-        elif response == "TIMEOUT":
-            logger.warning("⚠️ MCU timeout detected")
-            
-        elif response.startswith("STATUS:"):
-            logger.info(f"📊 MCU Status: {response}")
-            
-        elif response.startswith("ERROR:"):
-            logger.error(f"❌ MCU Error: {response}")
-    
-    def monitor_mcu_heartbeat(self):
-        """Monitor MCU heartbeat"""
-        logger.info("🫀 Starting MCU heartbeat monitor...")
-        
-        while self.running:
-            try:
-                # Check for missed heartbeat
-                if time.time() - self.mcu_last_heartbeat > 7:  # Slightly longer than 5s interval
-                    logger.warning("⚠️ MCU heartbeat missed")
-                    
-                    # Attempt reconnect
-                    logger.info("🔄 Attempting MCU reconnect...")
-                    if self.connect_mcu():
-                        logger.info("✅ MCU reconnected successfully")
-                    else:
-                        logger.error("❌ MCU reconnect failed")
-                    
-                    self.mcu_last_heartbeat = time.time()
-                
-                # Read any pending responses
-                self.read_mcu_responses()
-                
-                time.sleep(1)  # Check every second
-                
-            except Exception as e:
-                logger.error(f"MCU heartbeat monitor error: {e}")
-                time.sleep(1)  # Prevent tight error loop
-    
-    def start_mcu_monitoring(self):
-        """Start MCU response and heartbeat monitoring"""
-        if self.mcu_response_thread and self.mcu_response_thread.is_alive():
-            return  # Already running
-            
-        self.mcu_response_thread = threading.Thread(target=self.monitor_mcu_heartbeat, daemon=True)
-        self.mcu_response_thread.start()
-        logger.info("🫀 MCU monitoring started")
     
     def simplified_handshake(self):
         """Try a simplified handshake without complex encryption"""
@@ -4402,7 +4167,6 @@ class LionelMTHBridge:
                                         mth_cmd = self.convert_to_mth_protocol(command)
                                         if mth_cmd:
                                             logger.info(f"📤 MTH: {mth_cmd}")
-                                        self.send_to_mcu(command)
                                         self.send_to_mth(command)
                         else:
                             # Log every 10 seconds if no data received

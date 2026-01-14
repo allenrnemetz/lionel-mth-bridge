@@ -78,10 +78,7 @@ Remote → Base 3 → SER2 → FTDI → Arduino UNO Q → WiFi → WTIU → Trac
    - `install.sh` (installer script)
    - `lionel-mth-bridge.service` (systemd service file)
 
-5. Upload to the `sketch/` folder:
-   - `mcu_mth_handler.ino` (Arduino sketch for MCU communication)
-
-6. In App Lab, click **Run** to flash the files to the Arduino Uno Q
+5. In App Lab, click **Run** to flash the files to the Arduino Uno Q
 
 ### Step 3: Run the Installer
 
