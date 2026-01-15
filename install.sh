@@ -86,10 +86,8 @@ fi
 print_status "Creating systemd service..."
 SERVICE_FILE="/etc/systemd/system/lionel-mth-bridge.service"
 
-if [ -w "/etc/systemd/system" ]; then
-    # We can write to systemd directory
-    cat > "$SERVICE_FILE" << EOF
-[Unit]
+# Create service file content
+SERVICE_CONTENT="[Unit]
 Description=Lionel MTH Bridge Service
 After=network.target
 
@@ -103,17 +101,15 @@ RestartSec=10
 Environment=PYTHONPATH=$(pwd)
 
 [Install]
-WantedBy=multi-user.target
-EOF
+WantedBy=multi-user.target"
 
-    # Reload systemd and enable service
-    sudo systemctl daemon-reload
-    sudo systemctl enable lionel-mth-bridge.service
-    print_status "Systemd service created and enabled"
-else
-    print_warning "Cannot create systemd service (no write permissions)"
-    print_status "You can manually create the service file at: $SERVICE_FILE"
-fi
+# Use sudo to write the service file
+echo "$SERVICE_CONTENT" | sudo tee "$SERVICE_FILE" > /dev/null
+
+# Reload systemd and enable service
+sudo systemctl daemon-reload
+sudo systemctl enable lionel-mth-bridge.service
+print_status "Systemd service created and enabled"
 
 # Create startup scripts
 print_status "Creating startup scripts..."
